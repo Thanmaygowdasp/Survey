@@ -1,7 +1,6 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-const nodemailer = require('nodemailer');
 
 const app = express();
 const db = new sqlite3.Database('./database.db');
@@ -20,36 +19,37 @@ CREATE TABLE IF NOT EXISTS surveys (
   surveyCode TEXT
 )`);
 
-// ---------- GMAIL SMTP ----------
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-  }
-});
+// ---------- BREVO MAIL FUNCTION ----------
+async function sendApprovalMail(toEmail, code) {
+  try {
+    await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "api-key": process.env.BREVO_API_KEY,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        sender: {
+          email: process.env.SENDER_EMAIL,
+          name: "Survey Team",
+        },
+        to: [{ email: toEmail }],
+        subject: "Survey Participation Confirmation",
+        htmlContent: `
+          <h3>Hello,</h3>
+          <p>Thank you for participating in our survey.</p>
+          <p>Your 6 digit confirmation code:</p>
+          <h2>${code}</h2>
+          <p>Please share this with our team member only.</p>
+        `,
+      }),
+    });
 
-transporter.verify(function (error, success) {
-  if (error) {
-    console.log("SMTP ERROR:", error);
-  } else {
-    console.log("SMTP READY");
+    console.log("Mail sent to", toEmail);
+  } catch (e) {
+    console.log("MAIL ERROR:", e);
   }
-});
-
-function sendApprovalMail(toEmail, code, name) {
-  transporter.sendMail({
-    from: process.env.EMAIL_USER,
-    to: toEmail,
-    subject: 'Survey Participation Confirmation',
-    html: `
-      <h3>Hello,</h3>
-      <p>Thank you for participating in our survey.</p>
-      <p>Your 6 digit confirmation code:</p>
-      <h2>${code}</h2>
-      <h3>Please Share this with our team Member only</h3>
-    `
-  });
 }
 
 // ---------- SUBMIT SURVEY ----------
@@ -74,22 +74,24 @@ app.get('/admin/surveys', (req, res) => {
   });
 });
 
-// ---------- UPDATE STATUS + MAIL ----------
+// ---------- UPDATE STATUS + SEND MAIL ----------
 app.post('/update-status', (req, res) => {
   const { id, status } = req.body;
 
   db.get('SELECT * FROM surveys WHERE id=?', [id], (err, row) => {
-    db.run('UPDATE surveys SET status=? WHERE id=?', [status, id], () => {
+    if (!row) return res.json({ msg: "Survey not found" });
+
+    db.run('UPDATE surveys SET status=? WHERE id=?', [status, id], async () => {
       if (status === 'active') {
         const code = Math.floor(100000 + Math.random() * 900000);
-        sendApprovalMail(row.email, code, row.name);
+        await sendApprovalMail(row.email, code);
       }
       res.json({ msg: 'Updated & Mail Sent' });
     });
   });
 });
 
-// ---------- DELETE ----------
+// ---------- DELETE SURVEY ----------
 app.delete('/delete-survey/:id', (req, res) => {
   const id = req.params.id;
 
