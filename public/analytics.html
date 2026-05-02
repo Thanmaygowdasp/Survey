@@ -1,0 +1,26 @@
+<h2>Analytics Report</h2>
+<div id="out"></div>
+
+<script>
+fetch('/analytics')
+.then(r=>r.json())
+.then(d=>{
+  out.innerHTML=`
+    <h3>Summary</h3>
+    Total: ${d.summary[0].value}<br>
+    Addiction %: ${d.summary[1].value}<br>
+    Mental Negative %: ${d.summary[2].value}<br>
+
+    <h3>Usage</h3>
+    Low: ${d.usage.low} |
+    Medium: ${d.usage.medium} |
+    High: ${d.usage.high}<br>
+
+    <h3>Purpose</h3>
+    Entertainment: ${d.purpose.entertainment}<br>
+    Education: ${d.purpose.education}<br>
+    Business: ${d.purpose.business}<br>
+    Chatting: ${d.purpose.chatting}
+  `;
+});
+</script>

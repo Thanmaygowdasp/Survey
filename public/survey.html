@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Survey</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Inter',sans-serif}
+
+body{
+  background: linear-gradient(135deg,#f5f7fa,#e4ecf7);
+  display:flex;
+  justify-content:center;
+  padding:30px 10px;
+}
+
+.wrapper{
+  width:100%;
+  max-width:520px;
+  background:#fff;
+  border-radius:18px;
+  box-shadow:0 20px 40px rgba(0,0,0,0.08);
+  padding:25px 22px;
+  animation:fade .4s ease;
+}
+
+@keyframes fade{
+  from{opacity:0;transform:translateY(10px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+.header{
+  text-align:center;
+  margin-bottom:22px;
+}
+
+.header h2{
+  font-size:20px;
+  font-weight:700;
+}
+
+.header p{
+  font-size:13px;
+  color:#666;
+  margin-top:6px;
+}
+
+.question{
+  margin-bottom:22px;
+  padding:14px 12px;
+  border-radius:12px;
+  background:#f9fbfd;
+  border:1px solid #e6edf5;
+  transition:.2s;
+}
+
+.question:hover{
+  border-color:#cddff7;
+  background:#f3f8ff;
+}
+
+.question-title{
+  font-weight:600;
+  margin-bottom:10px;
+  font-size:14px;
+}
+
+.option{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:8px 0;
+  font-size:13px;
+  cursor:pointer;
+}
+
+.option input{
+  accent-color:#4a90e2;
+  transform:scale(1.1);
+}
+
+button{
+  width:100%;
+  margin-top:10px;
+  padding:14px;
+  border:none;
+  border-radius:10px;
+  background:#4a90e2;
+  color:#fff;
+  font-weight:600;
+  font-size:15px;
+  cursor:pointer;
+  transition:.2s;
+}
+
+button:hover{
+  transform:translateY(-1px);
+  box-shadow:0 10px 20px rgba(74,144,226,0.25);
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrapper">
+
+  <div class="header">
+    <h2 id="welcome"></h2>
+    <p>Please answer all questions honestly</p>
+  </div>
+
+  <form id="surveyForm">
+    <div id="questions"></div>
+    <button type="submit">Submit Survey</button>
+  </form>
+
+</div>
+
+<script>
+const name = localStorage.getItem('name') || "User";
+const email = localStorage.getItem('email') || "No Email";
+
+document.getElementById('welcome').innerText =
+  `Welcome ${email}`;
+
+// Questions
+const questions = [
+  { q: "How many hours do you spend on social media daily?",
+    options: ["< 1 hour", "1–3 hours", "3–5 hours", "5+ hours"] },
+  { q: "Main purpose of using social media?",
+    options: ["Entertainment", "Education", "Business", "Chatting"] },
+  { q: "Does social media waste your time?",
+    options: ["Yes", "Sometimes", "No"] },
+  { q: "Mental health impact?",
+    options: ["Positive", "Neutral", "Negative"] },
+  { q: "Do you feel addicted?",
+    options: ["Yes", "No", "Sometimes"] },
+  { q: "Content you see most?",
+    options: ["Videos", "Memes", "Education", "Influencers"] },
+  { q: "Productivity impact?",
+    options: ["High negative", "Moderate", "Low", "No effect"] },
+  { q: "Do you compare your life with others?",
+    options: ["Often", "Sometimes", "Never"] },
+  { q: "Overall social media effect?",
+    options: ["Positive", "Balanced", "Negative"] },
+  { q: "Final opinion?",
+    options: ["Good platform", "Neutral", "Bad influence"] }
+];
+
+const qDiv = document.getElementById('questions');
+
+questions.forEach((item,i)=>{
+  const box=document.createElement('div');
+  box.className='question';
+
+  box.innerHTML=`
+    <div class="question-title">${item.q}</div>
+    ${item.options.map(opt=>`
+      <label class="option">
+        <input type="radio" name="q${i}" value="${opt}" required>
+        ${opt}
+      </label>
+    `).join('')}
+  `;
+
+  qDiv.appendChild(box);
+});
+
+document.getElementById('surveyForm').addEventListener('submit', e=>{
+  e.preventDefault();
+
+  const formData=new FormData(e.target);
+  const answers={};
+  formData.forEach((v,k)=>answers[k]=v);
+
+  fetch('/submit-survey',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name,email,answers})
+  })
+  .then(r=>r.json())
+  .then(data=>{
+    alert(`Survey submitted!\n\nThank You Participating Our team Will Send code to Email Please Wait`);
+    localStorage.clear();
+    window.location.href="/";
+  });
+});
+</script>
+
+</body>
+</html>
