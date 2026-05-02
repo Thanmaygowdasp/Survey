@@ -39,7 +39,7 @@ transporter.verify(function (error, success) {
 
 function sendApprovalMail(toEmail, code, name) {
   transporter.sendMail({
-    from: 'YOUR_GMAIL@gmail.com',
+    from: process.env.EMAIL_USER,
     to: toEmail,
     subject: 'Survey Participation Confirmation',
     html: `
