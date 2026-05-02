@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS surveys (
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'thanmaigowdasp12@gmail.com',
-    pass: 'xclw aizq bnvh rnnc'
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
   }
 });
 
