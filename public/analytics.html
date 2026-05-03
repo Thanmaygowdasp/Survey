@@ -1,5 +1,60 @@
-<h2>Analytics Report</h2>
-<div id="out"></div>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Analytics Report</title>
+  <style>
+    body{
+      font-family: Arial, Helvetica, sans-serif;
+      background:#f4f6f8;
+      margin:0;
+      padding:30px;
+      display:flex;
+      justify-content:center;
+    }
+
+    .card{
+      background:#fff;
+      width:600px;
+      padding:25px 30px;
+      border-radius:10px;
+      box-shadow:0 5px 15px rgba(0,0,0,0.1);
+    }
+
+    h2{
+      text-align:center;
+      margin-bottom:20px;
+    }
+
+    h3{
+      margin-top:25px;
+      border-bottom:1px solid #ddd;
+      padding-bottom:6px;
+      color:#333;
+    }
+
+    .row{
+      display:flex;
+      justify-content:space-between;
+      margin:8px 0;
+      font-size:15px;
+    }
+
+    .label{
+      color:#555;
+    }
+
+    .value{
+      font-weight:bold;
+      color:#111;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Analytics Report</h2>
+    <div id="out">Loading...</div>
+  </div>
 
 <script>
 fetch('/analytics')
@@ -7,20 +62,23 @@ fetch('/analytics')
 .then(d=>{
   out.innerHTML=`
     <h3>Summary</h3>
-    Total: ${d.summary[0].value}<br>
-    Addiction %: ${d.summary[1].value}<br>
-    Mental Negative %: ${d.summary[2].value}<br>
+    <div class="row"><span class="label">Total Responses</span><span class="value">${d.summary[0].value}</span></div>
+    <div class="row"><span class="label">Addiction %</span><span class="value">${d.summary[1].value}%</span></div>
+    <div class="row"><span class="label">Mental Negative %</span><span class="value">${d.summary[2].value}%</span></div>
 
-    <h3>Usage</h3>
-    Low: ${d.usage.low} |
-    Medium: ${d.usage.medium} |
-    High: ${d.usage.high}<br>
+    <h3>Usage Level</h3>
+    <div class="row"><span class="label">Low</span><span class="value">${d.usage.low}</span></div>
+    <div class="row"><span class="label">Medium</span><span class="value">${d.usage.medium}</span></div>
+    <div class="row"><span class="label">High</span><span class="value">${d.usage.high}</span></div>
 
     <h3>Purpose</h3>
-    Entertainment: ${d.purpose.entertainment}<br>
-    Education: ${d.purpose.education}<br>
-    Business: ${d.purpose.business}<br>
-    Chatting: ${d.purpose.chatting}
+    <div class="row"><span class="label">Entertainment</span><span class="value">${d.purpose.entertainment}</span></div>
+    <div class="row"><span class="label">Education</span><span class="value">${d.purpose.education}</span></div>
+    <div class="row"><span class="label">Business</span><span class="value">${d.purpose.business}</span></div>
+    <div class="row"><span class="label">Chatting</span><span class="value">${d.purpose.chatting}</span></div>
   `;
 });
 </script>
+
+</body>
+</html>
