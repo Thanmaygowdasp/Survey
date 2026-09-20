@@ -1,83 +1,288 @@
 <!DOCTYPE html>
-<html>
+
+<html lang="en">
+
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>Admin Dashboard</title>
+
   <style>
-    body { font-family: Arial; padding: 20px; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid black; padding: 8px; text-align: center; }
-    button { padding: 6px 10px; margin: 2px; cursor: pointer; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    h2 {
+      margin-bottom: 20px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    th,
+    td {
+      border: 1px solid black;
+      padding: 8px;
+      text-align: center;
+    }
+
+    button {
+      padding: 6px 10px;
+      margin: 2px;
+      cursor: pointer;
+    }
+
+    .error {
+      color: red;
+      margin-bottom: 15px;
+    }
   </style>
+
 </head>
+
 <body>
 
-<h2>Admin Dashboard</h2>
+  <h2>Admin Dashboard</h2>
 
-<table>
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>Name</th>
-      <th>Email</th>
-      <th>Survey Code</th>
-      <th>Status</th>
-      <th>Action</th>
-    </tr>
-  </thead>
-  <tbody id="body"></tbody>
-</table>
+  <div id="error" class="error"></div>
 
-<script>
-const body = document.getElementById('body');
+  <table>
 
-async function load() {
-  const res = await fetch('/admin/surveys');
-  const data = await res.json();
+```
+<thead>
+  <tr>
+    <th>ID</th>
+    <th>Name</th>
+    <th>Email</th>
+    <th>Survey Code</th>
+    <th>Status</th>
+    <th>Action</th>
+  </tr>
+</thead>
 
-  body.innerHTML = '';
+<tbody id="body"></tbody>
+```
 
-  data.forEach(s => {
-    body.innerHTML += `
-      <tr>
-        <td>${s.id}</td>
-        <td>${s.name}</td>
-        <td>${s.email}</td>
-        <td>${s.surveyCode}</td>
-        <td>${s.status}</td>
-        <td>
-          <button onclick="activate(${s.id})">Activate</button>
-          <button onclick="deleteSurvey(${s.id})">Delete</button>
-        </td>
-      </tr>
-    `;
-  });
-}
+  </table>
 
-function activate(id) {
-  fetch('/update-status', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: id, status: 'active' })
-  })
-  .then(res => res.json())
-  .then(() => {
-    alert("Survey Activated & Email Sent");
+  <script>
+
+    const body = document.getElementById("body");
+    const errorBox = document.getElementById("error");
+
+
+    // ==============================
+    // LOAD SURVEYS
+    // ==============================
+
+    async function load() {
+
+      try {
+
+        errorBox.innerText = "";
+
+        const response = await fetch("/admin/surveys");
+
+        if (!response.ok) {
+          throw new Error("Failed to load surveys");
+        }
+
+        const data = await response.json();
+
+        body.innerHTML = "";
+
+        data.forEach(survey => {
+
+          const row = document.createElement("tr");
+
+          row.innerHTML = `
+            <td>${survey.id}</td>
+            <td></td>
+            <td></td>
+            <td>${survey.surveyCode || "-"}</td>
+            <td>${survey.status || "-"}</td>
+            <td></td>
+          `;
+
+
+          // Safely add user data
+          row.children[1].textContent = survey.name || "-";
+          row.children[2].textContent = survey.email || "-";
+
+
+          // ==============================
+          // SEND EMAIL BUTTON
+          // ==============================
+
+          const sendButton = document.createElement("button");
+
+          if (survey.status === "active" && survey.surveyCode) {
+
+            sendButton.textContent = "Sent";
+            sendButton.disabled = true;
+
+          } else {
+
+            sendButton.textContent = "Send Email";
+
+            sendButton.addEventListener("click", () => {
+              sendEmail(survey.id);
+            });
+
+          }
+
+
+          // ==============================
+          // DELETE BUTTON
+          // ==============================
+
+          const deleteButton = document.createElement("button");
+
+          deleteButton.textContent = "Delete";
+
+          deleteButton.addEventListener("click", () => {
+            deleteSurvey(survey.id);
+          });
+
+
+          row.children[5].appendChild(sendButton);
+          row.children[5].appendChild(deleteButton);
+
+          body.appendChild(row);
+
+        });
+
+      } catch (error) {
+
+        console.error("LOAD ERROR:", error);
+
+        errorBox.innerText =
+          "Failed to load surveys. Please check the server.";
+
+      }
+
+    }
+
+
+    // ==============================
+    // SEND EMAIL
+    // ==============================
+
+    async function sendEmail(id) {
+
+      const confirmSend = confirm(
+        "Are you sure you want to send the survey code to this user's email?"
+      );
+
+      if (!confirmSend) {
+        return;
+      }
+
+
+      try {
+
+        const response = await fetch(
+          `/send-email/${id}`,
+          {
+            method: "POST"
+          }
+        );
+
+
+        const data = await response.json();
+
+
+        if (!response.ok) {
+          throw new Error(data.msg || "Email sending failed");
+        }
+
+
+        alert(
+          data.msg +
+          "\n\nSurvey Code: " +
+          data.surveyCode
+        );
+
+
+        load();
+
+      } catch (error) {
+
+        console.error("SEND EMAIL ERROR:", error);
+
+        alert(
+          "Failed to send email.\n\n" +
+          error.message
+        );
+
+      }
+
+    }
+
+
+    // ==============================
+    // DELETE SURVEY
+    // ==============================
+
+    async function deleteSurvey(id) {
+
+      const confirmDelete = confirm(
+        "Are you sure you want to delete this survey?"
+      );
+
+      if (!confirmDelete) {
+        return;
+      }
+
+
+      try {
+
+        const response = await fetch(
+          `/delete-survey/${id}`,
+          {
+            method: "DELETE"
+          }
+        );
+
+
+        const data = await response.json();
+
+
+        if (!response.ok) {
+          throw new Error(data.msg || "Delete failed");
+        }
+
+
+        alert(data.msg);
+
+        load();
+
+      } catch (error) {
+
+        console.error("DELETE ERROR:", error);
+
+        alert(
+          "Failed to delete survey.\n\n" +
+          error.message
+        );
+
+      }
+
+    }
+
+
+    // ==============================
+    // LOAD TABLE
+    // ==============================
+
     load();
-  });
-}
 
-function deleteSurvey(id) {
-  fetch(`/delete-survey/${id}`, { method: 'DELETE' })
-    .then(res => res.json())
-    .then(data => {
-      alert(data.msg);
-      load(); // reload table
-    });
-}
-
-// Load table on open
-load();
-</script>
+  </script>
 
 </body>
+
 </html>

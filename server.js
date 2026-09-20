@@ -1,143 +1,809 @@
-const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+// ==========================================
+// IMPORTS
+// ==========================================
+
+require("dotenv").config();
+
+const express = require("express");
+const { Pool } = require("pg");
+const path = require("path");
+
+
+// ==========================================
+// APP SETUP
+// ==========================================
 
 const app = express();
-const db = new sqlite3.Database('./database.db');
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
-// ---------- DATABASE ----------
-db.run(`
-CREATE TABLE IF NOT EXISTS surveys (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT,
-  email TEXT,
-  answers TEXT,
-  status TEXT,
-  surveyCode TEXT
-)`);
+app.use(
+  express.static(
+    path.join(__dirname, "public")
+  )
+);
 
-// ---------- BREVO MAIL FUNCTION ----------
-async function sendApprovalMail(toEmail, code) {
+
+// ==========================================
+// POSTGRESQL DATABASE
+// ==========================================
+
+const pool = new Pool({
+  host: process.env.PGHOST || "localhost",
+  port: process.env.PGPORT || 5432,
+  user: process.env.PGUSER || "postgres",
+  password: process.env.PGPASSWORD,
+  database: process.env.PGDATABASE || "survey_db"
+});
+
+
+// ==========================================
+// TEST DATABASE CONNECTION
+// ==========================================
+
+pool
+  .query("SELECT NOW()")
+  .then(() => {
+    console.log("PostgreSQL connected successfully");
+  })
+  .catch((error) => {
+    console.error(
+      "PostgreSQL connection error:",
+      error
+    );
+  });
+
+
+// ==========================================
+// CREATE TABLE
+// ==========================================
+
+async function createTable() {
+
   try {
-    await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "accept": "application/json",
-        "api-key": process.env.BREVO_API_KEY,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        sender: {
-          email: process.env.SENDER_EMAIL,
-          name: "Survey Team",
-        },
-        to: [{ email: toEmail }],
-        subject: "Survey Participation Confirmation",
-        htmlContent: `
-          <h3>Hello,</h3>
-          <p>Thank you for participating in our survey.</p>
-          <p>Your 6 digit confirmation code:</p>
-          <h2>${code}</h2>
-          <p>Please share this with our team member only.</p>
-        `,
-      }),
-    });
 
-    console.log("Mail sent to", toEmail);
-  } catch (e) {
-    console.log("MAIL ERROR:", e);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS surveys (
+
+        id SERIAL PRIMARY KEY,
+
+        name TEXT NOT NULL,
+
+        email TEXT NOT NULL,
+
+        answers JSONB NOT NULL,
+
+        status TEXT NOT NULL DEFAULT 'pending',
+
+        survey_code VARCHAR(6),
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+      )
+    `);
+
+    console.log("Surveys table ready");
+
+  } catch (error) {
+
+    console.error(
+      "TABLE CREATION ERROR:",
+      error
+    );
+
   }
+
 }
 
-// ---------- SUBMIT SURVEY ----------
-app.post('/submit-survey', (req, res) => {
-  const { name, email, answers } = req.body;
 
-  const surveyCode = Math.floor(10000 + Math.random() * 90000);
+// ==========================================
+// BREVO MAIL FUNCTION
+// ==========================================
 
-  db.run(
-    'INSERT INTO surveys (name,email,answers,status,surveyCode) VALUES (?,?,?,?,?)',
-    [name, email, JSON.stringify(answers), 'pending', surveyCode],
-    function () {
-      res.json({ msg: 'Survey submitted!', surveyCode });
+async function sendApprovalMail(
+  toEmail,
+  code
+) {
+
+  try {
+
+    const response = await fetch(
+      "https://api.brevo.com/v3/smtp/email",
+      {
+        method: "POST",
+
+        headers: {
+          accept: "application/json",
+          "api-key": process.env.BREVO_API_KEY,
+          "content-type": "application/json"
+        },
+
+        body: JSON.stringify({
+
+          sender: {
+            email: process.env.SENDER_EMAIL,
+            name: "Survey Team"
+          },
+
+          to: [
+            {
+              email: toEmail
+            }
+          ],
+
+          subject:
+            "Survey Participation Confirmation",
+
+          htmlContent: `
+            <h3>Hello,</h3>
+
+            <p>
+              Thank you for participating
+              in our survey.
+            </p>
+
+            <p>
+              Your 6-digit confirmation code is:
+            </p>
+
+            <h2>${code}</h2>
+
+            <p>
+              Please share this code
+              with our team member only.
+            </p>
+          `
+
+        })
+      }
+    );
+
+
+    if (!response.ok) {
+
+      const errorText =
+        await response.text();
+
+      console.error(
+        "BREVO ERROR:",
+        errorText
+      );
+
+      return false;
+    }
+
+
+    console.log(
+      "Mail sent to:",
+      toEmail
+    );
+
+    return true;
+
+
+  } catch (error) {
+
+    console.error(
+      "MAIL ERROR:",
+      error
+    );
+
+    return false;
+  }
+
+}
+
+
+// ==========================================
+// SUBMIT SURVEY
+// ==========================================
+
+app.post(
+  "/submit-survey",
+  async (req, res) => {
+
+    try {
+
+      const {
+        name,
+        email,
+        answers
+      } = req.body;
+
+
+      console.log(
+        "SUBMIT REQUEST:",
+        req.body
+      );
+
+
+      // Validate data
+      if (
+        !name ||
+        !email ||
+        !answers ||
+        typeof answers !== "object"
+      ) {
+
+        return res.status(400).json({
+          msg: "Missing survey data"
+        });
+
+      }
+
+
+      // Save survey as pending.
+      // Code is NOT generated here.
+
+      const result = await pool.query(
+
+        `
+        INSERT INTO surveys
+        (
+          name,
+          email,
+          answers,
+          status
+        )
+
+        VALUES
+        ($1, $2, $3, $4)
+
+        RETURNING id
+        `,
+
+        [
+          name,
+          email,
+          answers,
+          "pending"
+        ]
+
+      );
+
+
+      console.log(
+        "SURVEY SAVED:",
+        result.rows[0].id
+      );
+
+
+      res.status(201).json({
+
+        msg:
+          "Thank you for participating in our survey!",
+
+        surveyId:
+          result.rows[0].id
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "SUBMIT DATABASE ERROR:",
+        error
+      );
+
+
+      res.status(500).json({
+        msg: "Failed to save survey"
+      });
+
+    }
+
+  }
+);
+
+
+// ==========================================
+// ADMIN - GET ALL SURVEYS
+// ==========================================
+
+app.get(
+  "/admin/surveys",
+  async (req, res) => {
+
+    try {
+
+      const result = await pool.query(`
+
+        SELECT
+
+          id,
+
+          name,
+
+          email,
+
+          survey_code AS "surveyCode",
+
+          status,
+
+          created_at AS "createdAt"
+
+        FROM surveys
+
+        ORDER BY id DESC
+
+      `);
+
+
+      res.json(result.rows);
+
+
+    } catch (error) {
+
+      console.error(
+        "ADMIN LIST ERROR:",
+        error
+      );
+
+
+      res.status(500).json({
+        msg: "Failed to load surveys"
+      });
+
+    }
+
+  }
+);
+
+
+// ==========================================
+// ADMIN - SEND EMAIL
+// ==========================================
+
+app.post(
+  "/send-email/:id",
+  async (req, res) => {
+
+    try {
+
+      const id =
+        req.params.id;
+
+
+      // Find survey
+      const result =
+        await pool.query(
+
+          `
+          SELECT
+            id,
+            email,
+            status,
+            survey_code
+          FROM surveys
+
+          WHERE id = $1
+          `,
+
+          [id]
+
+        );
+
+
+      if (
+        result.rows.length === 0
+      ) {
+
+        return res.status(404).json({
+          msg: "Survey not found"
+        });
+
+      }
+
+
+      const survey =
+        result.rows[0];
+
+
+      // Prevent sending multiple codes
+      if (
+        survey.status === "active" &&
+        survey.survey_code
+      ) {
+
+        return res.status(400).json({
+          msg: "Email has already been sent"
+        });
+
+      }
+
+
+      // ==================================
+      // GENERATE 6-DIGIT CODE
+      // ==================================
+
+      const code =
+        Math.floor(
+          100000 +
+          Math.random() * 900000
+        ).toString();
+
+
+      // ==================================
+      // SEND EMAIL FIRST
+      // ==================================
+
+      const mailSent =
+        await sendApprovalMail(
+          survey.email,
+          code
+        );
+
+
+      if (!mailSent) {
+
+        return res.status(500).json({
+
+          msg:
+            "Email could not be sent. Code was not saved."
+
+        });
+
+      }
+
+
+      // ==================================
+      // SAVE CODE AFTER EMAIL SUCCESS
+      // ==================================
+
+      await pool.query(
+
+        `
+        UPDATE surveys
+
+        SET
+          status = $1,
+          survey_code = $2
+
+        WHERE id = $3
+        `,
+
+        [
+          "active",
+          code,
+          id
+        ]
+
+      );
+
+
+      // ==================================
+      // SUCCESS
+      // ==================================
+
+      res.json({
+
+        msg:
+          "Email sent successfully",
+
+        surveyCode:
+          code
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "SEND EMAIL ERROR:",
+        error
+      );
+
+
+      res.status(500).json({
+        msg: "Failed to send email"
+      });
+
+    }
+
+  }
+);
+
+
+// ==========================================
+// DELETE SURVEY
+// ==========================================
+
+app.delete(
+  "/delete-survey/:id",
+  async (req, res) => {
+
+    try {
+
+      const id =
+        req.params.id;
+
+
+      const result =
+        await pool.query(
+
+          `
+          DELETE FROM surveys
+
+          WHERE id = $1
+
+          RETURNING id
+          `,
+
+          [id]
+
+        );
+
+
+      if (
+        result.rows.length === 0
+      ) {
+
+        return res.status(404).json({
+          msg: "Survey not found"
+        });
+
+      }
+
+
+      res.json({
+        msg: "Deleted successfully"
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "DELETE ERROR:",
+        error
+      );
+
+
+      res.status(500).json({
+        msg: "Delete error"
+      });
+
+    }
+
+  }
+);
+
+
+// ==========================================
+// ANALYTICS
+// ==========================================
+
+app.get(
+  "/analytics",
+  async (req, res) => {
+
+    try {
+
+      const result =
+        await pool.query(`
+
+          SELECT
+            answers
+
+          FROM surveys
+
+        `);
+
+
+      const rows =
+        result.rows;
+
+
+      const total =
+        rows.length;
+
+
+      let usage = {
+        low: 0,
+        medium: 0,
+        high: 0
+      };
+
+
+      let purpose = {
+        entertainment: 0,
+        education: 0,
+        business: 0,
+        chatting: 0
+      };
+
+
+      let addictionYes =
+        0;
+
+
+      let mentalNegative =
+        0;
+
+
+      // ==================================
+      // PROCESS ANSWERS
+      // ==================================
+
+      rows.forEach(row => {
+
+        const answers =
+          row.answers;
+
+
+        // Question 1
+        if (
+          answers.q0 === "5+ hours"
+        ) {
+
+          usage.high++;
+
+        } else if (
+          answers.q0 === "3–5 hours"
+        ) {
+
+          usage.medium++;
+
+        } else {
+
+          usage.low++;
+
+        }
+
+
+        // Question 2
+        if (
+          answers.q1 === "Entertainment"
+        ) {
+
+          purpose.entertainment++;
+
+        }
+
+
+        if (
+          answers.q1 === "Education"
+        ) {
+
+          purpose.education++;
+
+        }
+
+
+        if (
+          answers.q1 === "Business"
+        ) {
+
+          purpose.business++;
+
+        }
+
+
+        if (
+          answers.q1 === "Chatting"
+        ) {
+
+          purpose.chatting++;
+
+        }
+
+
+        // Question 5
+        if (
+          answers.q4 === "Yes"
+        ) {
+
+          addictionYes++;
+
+        }
+
+
+        // Question 4
+        if (
+          answers.q3 === "Negative"
+        ) {
+
+          mentalNegative++;
+
+        }
+
+      });
+
+
+      // ==================================
+      // SEND ANALYTICS
+      // ==================================
+
+      res.json({
+
+        summary: [
+
+          {
+            label:
+              "Total Surveys",
+
+            value:
+              total
+          },
+
+          {
+            label:
+              "Addiction %",
+
+            value:
+              total
+                ? (
+                    (addictionYes / total)
+                    * 100
+                  ).toFixed(1)
+                : "0.0"
+          },
+
+          {
+            label:
+              "Mental Negative %",
+
+            value:
+              total
+                ? (
+                    (mentalNegative / total)
+                    * 100
+                  ).toFixed(1)
+                : "0.0"
+          }
+
+        ],
+
+        usage,
+
+        purpose
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "ANALYTICS ERROR:",
+        error
+      );
+
+
+      res.status(500).json({
+        msg: "Failed to load analytics"
+      });
+
+    }
+
+  }
+);
+
+
+// ==========================================
+// START SERVER
+// ==========================================
+
+const PORT =
+  process.env.PORT || 5000;
+
+
+async function startServer() {
+
+  await createTable();
+
+
+  app.listen(
+    PORT,
+    () => {
+
+      console.log(
+        `Server running on port ${PORT}`
+      );
+
     }
   );
-});
 
-// ---------- ADMIN LIST ----------
-app.get('/admin/surveys', (req, res) => {
-  db.all('SELECT * FROM surveys ORDER BY id DESC', [], (err, rows) => {
-    res.json(rows);
-  });
-});
+}
 
-// ---------- UPDATE STATUS + SEND MAIL ----------
-app.post('/update-status', (req, res) => {
-  const { id, status } = req.body;
 
-  db.get('SELECT * FROM surveys WHERE id=?', [id], (err, row) => {
-    if (!row) return res.json({ msg: "Survey not found" });
-
-    db.run('UPDATE surveys SET status=? WHERE id=?', [status, id], async () => {
-      if (status === 'active') {
-        const code = Math.floor(100000 + Math.random() * 900000);
-        await sendApprovalMail(row.email, code);
-      }
-      res.json({ msg: 'Updated & Mail Sent' });
-    });
-  });
-});
-
-// ---------- DELETE SURVEY ----------
-app.delete('/delete-survey/:id', (req, res) => {
-  const id = req.params.id;
-
-  db.run('DELETE FROM surveys WHERE id=?', [id], function (err) {
-    if (err) return res.json({ msg: 'Delete error' });
-    res.json({ msg: 'Deleted successfully' });
-  });
-});
-
-// ---------- ANALYTICS ----------
-app.get('/analytics', (req, res) => {
-  db.all('SELECT * FROM surveys', [], (err, rows) => {
-    let total = rows.length;
-    let usage = { low:0, medium:0, high:0 };
-    let purpose = { entertainment:0, education:0, business:0, chatting:0 };
-    let addictionYes = 0;
-    let mentalNegative = 0;
-
-    rows.forEach(r=>{
-      const a = JSON.parse(r.answers);
-
-      if(a.q0 === "5+ hours") usage.high++;
-      else if(a.q0 === "3–5 hours") usage.medium++;
-      else usage.low++;
-
-      if(a.q1 === "Entertainment") purpose.entertainment++;
-      if(a.q1 === "Education") purpose.education++;
-      if(a.q1 === "Business") purpose.business++;
-      if(a.q1 === "Chatting") purpose.chatting++;
-
-      if(a.q4 === "Yes") addictionYes++;
-      if(a.q3 === "Negative") mentalNegative++;
-    });
-
-    res.json({
-      summary:[
-        {label:"Total Surveys", value: total},
-        {label:"Addiction %", value: total?((addictionYes/total)*100).toFixed(1):0},
-        {label:"Mental Negative %", value: total?((mentalNegative/total)*100).toFixed(1):0}
-      ],
-      usage, purpose
-    });
-  });
-});
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () =>
-  console.log(`Server running on port ${PORT}`)
-);
+startServer();
