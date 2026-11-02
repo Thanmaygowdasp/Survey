@@ -161,6 +161,9 @@
     // GET USER DETAILS
     // ==============================
 
+    const name = localStorage.getItem("name");
+    const email = localStorage.getItem("email");
+
     if (!name || !email) {
 
       alert("Please enter your details first.");
@@ -176,7 +179,7 @@
 
     const welcome = document.getElementById("welcome");
 
-    welcome.innerText = `Welcome ${name} (${email})`;
+    welcome.innerText = `Welcome User (${email})`;
 
 
     // ==============================
