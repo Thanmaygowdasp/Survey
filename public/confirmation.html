@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Survey Team - Approval Dashboard</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            background: #f4f6fb;
+            color: #222;
+            padding: 25px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+            margin-bottom: 20px;
+        }
+
+        h1,
+        h2 {
+            margin-top: 0;
+        }
+
+        input {
+            width: 100%;
+            padding: 13px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 7px;
+            font-size: 15px;
+        }
+
+        button {
+            padding: 11px 16px;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .primary {
+            background: #2563eb;
+            color: white;
+            width: 100%;
+        }
+
+        .approve {
+            background: #16a34a;
+            color: white;
+        }
+
+        .reject {
+            background: #dc2626;
+            color: white;
+        }
+
+        .refresh {
+            background: #e5e7eb;
+            color: #222;
+        }
+
+        .logout {
+            background: #222;
+            color: white;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .request {
+            border: 1px solid #e5e7eb;
+            padding: 18px;
+            border-radius: 9px;
+            margin-top: 15px;
+        }
+
+        .request p {
+            margin: 7px 0;
+            color: #555;
+            overflow-wrap: anywhere;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        #dashboard {
+            display: none;
+        }
+
+        #message {
+            margin-top: 12px;
+            font-size: 14px;
+        }
+
+        .empty {
+            color: #777;
+            text-align: center;
+            padding: 30px 10px;
+        }
+
+        @media (max-width: 500px) {
+            body {
+                padding: 12px;
+            }
+
+            .card {
+                padding: 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <!-- ADMIN LOGIN -->
+
+        <div class="card" id="loginSection">
+
+            <h1>Team Login</h1>
+
+            <p>Sign in to manage survey participation requests.</p>
+
+            <form id="loginForm">
+
+                <input type="password" id="adminPassword" placeholder="Enter admin password" required
+                    autocomplete="current-password">
+
+                <button type="submit" class="primary" id="loginButton">
+                    Login
+                </button>
+
+            </form>
+
+            <p id="loginMessage"></p>
+
+        </div>
+
+
+        <!-- ADMIN DASHBOARD -->
+
+        <div id="dashboard">
+
+            <div class="card">
+
+                <div class="topbar">
+
+                    <div>
+                        <h1>Approval Dashboard</h1>
+                        <p>Manage participant login requests.</p>
+                    </div>
+
+                    <button class="logout" id="logoutButton">
+                        Logout
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="topbar">
+
+                    <h2>Pending Requests</h2>
+
+                    <button class="refresh" id="refreshButton">
+                        Refresh
+                    </button>
+
+                </div>
+
+                <p id="requestCount">Loading requests...</p>
+
+                <div id="requestsList"></div>
+
+                <p id="dashboardMessage"></p>
+
+            </div>
+            <div class="card">
+
+                <div class="topbar">
+                    <h2>Participant History</h2>
+
+                    <button class="refresh" id="historyRefreshButton">
+                        Refresh History
+                    </button>
+                </div>
+
+                <input type="text" id="historySearch" placeholder="Search by participant name or email...">
+
+                <select id="historyStatus" style="width:100%; padding:12px; margin:10px 0;">
+                    <option value="all">All Participants</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="verified">Verified</option>
+                </select>
+
+                <p id="historyCount">Loading participant history...</p>
+
+                <div id="historyList"></div>
+
+                <p id="historyMessage"></p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <script>
+
+        const loginSection = document.getElementById("loginSection");
+        const dashboard = document.getElementById("dashboard");
+
+        const loginForm = document.getElementById("loginForm");
+        const adminPassword = document.getElementById("adminPassword");
+        const loginButton = document.getElementById("loginButton");
+        const loginMessage = document.getElementById("loginMessage");
+
+        const requestsList = document.getElementById("requestsList");
+        const requestCount = document.getElementById("requestCount");
+        const dashboardMessage = document.getElementById("dashboardMessage");
+
+        const refreshButton = document.getElementById("refreshButton");
+        const logoutButton = document.getElementById("logoutButton");
+        const historyList = document.getElementById("historyList");
+        const historyCount = document.getElementById("historyCount");
+        const historyMessage = document.getElementById("historyMessage");
+
+        const historyRefreshButton =
+            document.getElementById("historyRefreshButton");
+
+        const historySearch = document.getElementById("historySearch");
+        const historyStatus = document.getElementById("historyStatus");
+
+        let participantHistory = [];
+
+
+        // SHOW DASHBOARD
+
+        function showDashboard() {
+            loginSection.style.display = "none";
+            dashboard.style.display = "block";
+
+            loadRequests();
+            loadParticipantHistory();
+        }
+
+
+        // SHOW LOGIN
+
+        function showLogin() {
+            dashboard.style.display = "none";
+            loginSection.style.display = "block";
+        }
+
+
+        // ADMIN SESSION CHECK
+
+        async function checkAdminSession() {
+
+            try {
+
+                const response = await fetch("/admin/session");
+
+                const data = await response.json();
+
+                if (response.ok && data.isAdmin === true) {
+                    showDashboard();
+                } else {
+                    showLogin();
+                }
+
+            } catch (error) {
+
+                showLogin();
+
+                loginMessage.textContent =
+                    "Could not connect to the server.";
+
+            }
+
+        }
+
+
+        // ADMIN LOGIN
+
+        loginForm.addEventListener("submit", async (event) => {
+
+            event.preventDefault();
+
+            loginButton.disabled = true;
+            loginMessage.textContent = "Logging in...";
+
+            try {
+
+                const response = await fetch("/admin/login", {
+
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        password: adminPassword.value
+                    })
+
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.msg || "Login failed");
+                }
+
+                adminPassword.value = "";
+                loginMessage.textContent = "";
+
+                showDashboard();
+
+            } catch (error) {
+
+                loginMessage.textContent = error.message;
+
+            } finally {
+
+                loginButton.disabled = false;
+
+            }
+
+        });
+
+
+        // LOAD PENDING REQUESTS
+
+        async function loadRequests() {
+            refreshButton.disabled = true;
+            dashboardMessage.textContent = "";
+            requestCount.textContent = "Loading requests...";
+
+            try {
+                const response = await fetch("/admin/login-requests", {
+                    method: "GET",
+                    credentials: "same-origin",
+                    cache: "no-store"
+                });
+
+                const requests = await response.json();
+
+                if (response.status === 401 || response.status === 403) {
+                    dashboardMessage.textContent =
+                        "Admin session expired. Please log in again.";
+                    showLogin();
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(requests.msg || "Failed to load requests");
+                }
+
+                requestsList.replaceChildren();
+
+                requestCount.textContent =
+                    `Pending requests: ${requests.length}`;
+
+                if (requests.length === 0) {
+                    const empty = document.createElement("p");
+                    empty.className = "empty";
+                    empty.textContent = "No pending requests right now.";
+                    requestsList.appendChild(empty);
+                    return;
+                }
+
+                requests.forEach((request) => {
+                    const card = document.createElement("div");
+                    card.className = "request";
+
+                    const name = document.createElement("h3");
+                    name.textContent = request.name || "Unknown participant";
+
+                    const email = document.createElement("p");
+                    email.textContent = `Email: ${request.email || "Not available"}`;
+
+                    const date = document.createElement("p");
+                    date.textContent = request.createdAt
+                        ? `Requested: ${new Date(request.createdAt).toLocaleString()}`
+                        : "";
+
+                    const actions = document.createElement("div");
+                    actions.className = "actions";
+
+                    const approveButton = document.createElement("button");
+                    approveButton.className = "approve";
+                    approveButton.textContent = "Approve";
+
+                    const rejectButton = document.createElement("button");
+                    rejectButton.className = "reject";
+                    rejectButton.textContent = "Reject";
+
+                    approveButton.addEventListener("click", () => {
+                        processRequest(request.id, "approve", approveButton, rejectButton);
+                    });
+
+                    rejectButton.addEventListener("click", () => {
+                        processRequest(request.id, "reject", approveButton, rejectButton);
+                    });
+
+                    actions.append(approveButton, rejectButton);
+                    card.append(name, email, date, actions);
+                    requestsList.appendChild(card);
+                });
+
+            } catch (error) {
+                dashboardMessage.textContent = error.message;
+
+            } finally {
+                refreshButton.disabled = false;
+            }
+        }
+
+
+        // APPROVE OR REJECT REQUEST
+
+        async function processRequest(id, action, approveButton, rejectButton) {
+
+            const confirmed = confirm(
+                action === "approve"
+                    ? "Approve this participant?"
+                    : "Reject this participant?"
+            );
+
+            if (!confirmed) return;
+
+            approveButton.disabled = true;
+            rejectButton.disabled = true;
+
+            dashboardMessage.textContent = "Processing request...";
+
+            try {
+
+                const response = await fetch(
+                    `/admin/${action}/${id}`,
+                    {
+                        method: "POST"
+                    }
+                );
+
+                const data = await response.json();
+
+                if (response.status === 401 || response.status === 403) {
+                    showLogin();
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.msg || "Could not process request");
+                }
+
+                dashboardMessage.textContent = data.msg;
+
+                await loadRequests();
+
+            } catch (error) {
+
+                dashboardMessage.textContent = error.message;
+
+                approveButton.disabled = false;
+                rejectButton.disabled = false;
+
+            }
+
+        }
+        // LOAD PARTICIPANT HISTORY
+
+        async function loadParticipantHistory() {
+
+            historyRefreshButton.disabled = true;
+            historyMessage.textContent = "";
+            historyCount.textContent = "Loading history...";
+
+            try {
+
+                const response = await fetch("/admin/participant-history", {
+                    method: "GET",
+                    credentials: "same-origin",
+                    cache: "no-store"
+                });
+
+                const data = await response.json();
+
+                if (response.status === 401 || response.status === 403) {
+                    showLogin();
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.msg || "Failed to load history");
+                }
+
+                participantHistory = data;
+
+                displayParticipantHistory();
+
+            } catch (error) {
+
+                historyMessage.textContent = error.message;
+
+            } finally {
+
+                historyRefreshButton.disabled = false;
+
+            }
+        }
+
+
+        // DISPLAY PARTICIPANT HISTORY
+
+        function displayParticipantHistory() {
+
+            historyList.replaceChildren();
+
+            const search = historySearch.value.toLowerCase().trim();
+            const status = historyStatus.value;
+
+            const filtered = participantHistory.filter(participant => {
+
+                const matchesSearch =
+                    (participant.name || "").toLowerCase().includes(search) ||
+                    (participant.email || "").toLowerCase().includes(search);
+
+                const matchesStatus =
+                    status === "all" || participant.status === status;
+
+                return matchesSearch && matchesStatus;
+
+            });
+
+            historyCount.textContent =
+                `Showing ${filtered.length} of ${participantHistory.length} participants`;
+
+            if (filtered.length === 0) {
+
+                const empty = document.createElement("p");
+                empty.className = "empty";
+                empty.textContent = "No matching participants found.";
+
+                historyList.appendChild(empty);
+                return;
+            }
+
+            filtered.forEach(participant => {
+
+                const card = document.createElement("div");
+                card.className = "request";
+
+                const name = document.createElement("h3");
+                name.textContent = participant.name || "Unknown";
+
+                const email = document.createElement("p");
+                email.textContent = `Email: ${participant.email || "Unavailable"}`;
+
+                const statusText = document.createElement("p");
+                statusText.textContent = `Status: ${participant.status}`;
+
+                const date = document.createElement("p");
+                date.textContent = participant.createdAt
+                    ? `Requested: ${new Date(participant.createdAt).toLocaleString()}`
+                    : "";
+
+
+                const deleteButton = document.createElement("button");
+
+                deleteButton.type = "button";
+                deleteButton.className = "reject";
+                deleteButton.textContent = "Delete";
+
+                deleteButton.onclick = async function () {
+
+                    const confirmed = confirm(
+                        `Delete history for ${participant.name} (${participant.email})?`
+                    );
+
+                    if (!confirmed) return;
+
+                    try {
+
+                        deleteButton.disabled = true;
+                        deleteButton.textContent = "Deleting...";
+
+                        const response = await fetch(
+                            `/admin/participant-history/${participant.id}`,
+                            {
+                                method: "DELETE",
+                                credentials: "same-origin"
+                            }
+                        );
+
+                        const data = await response.json();
+
+                        if (response.status === 401 || response.status === 403) {
+                            showLogin();
+                            return;
+                        }
+
+                        if (!response.ok) {
+                            throw new Error(data.msg || "Delete failed");
+                        }
+
+                        alert("Participant history deleted successfully!");
+
+                        await loadParticipantHistory();
+
+                    } catch (error) {
+
+                        alert("Delete failed: " + error.message);
+
+                        deleteButton.disabled = false;
+                        deleteButton.textContent = "Delete";
+
+                    }
+                };
+
+                card.append(name, email, statusText, date, deleteButton);
+
+                historyList.appendChild(card);
+
+                card.append(name, email, statusText, date, deleteButton);
+
+                historyList.appendChild(card);
+
+
+            });
+
+        }
+
+
+        // HISTORY FILTERS
+
+        historyRefreshButton.addEventListener(
+            "click",
+            loadParticipantHistory
+        );
+
+        historySearch.addEventListener(
+            "input",
+            displayParticipantHistory
+        );
+
+        historyStatus.addEventListener(
+            "change",
+            displayParticipantHistory
+        );
+
+
+        // REFRESH REQUESTS
+
+        refreshButton.addEventListener("click", loadRequests);
+
+
+        // ADMIN LOGOUT
+
+        logoutButton.addEventListener("click", async () => {
+
+            try {
+
+                await fetch("/admin/logout", {
+                    method: "POST"
+                });
+
+            } finally {
+
+                showLogin();
+
+                adminPassword.value = "";
+                loginMessage.textContent = "You have logged out.";
+
+            }
+
+        });
+
+
+        // CHECK SESSION WHEN PAGE LOADS
+
+        checkAdminSession();
+
+    </script>
+
+</body>
+
+</html>
