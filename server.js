@@ -193,8 +193,25 @@ async function requireParticipant(req, res, next) {
 // ==========================================
 // DATABASE TABLE INITIALIZATION
 // ==========================================
-
+  
 async function createTable() {
+
+  // Create login requests table first.
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS login_requests (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(150) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      request_token_hash TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      verified_at TIMESTAMP
+    )
+  `);
+
+  // Create surveys table.
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS surveys (
       id SERIAL PRIMARY KEY,
@@ -207,15 +224,19 @@ async function createTable() {
     )
   `);
 
+  // Ensure required columns exist in older databases.
+
   await pool.query(`
     ALTER TABLE login_requests
       ADD COLUMN IF NOT EXISTS name VARCHAR(150),
       ADD COLUMN IF NOT EXISTS email VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS request_token_hash TEXT
+      ADD COLUMN IF NOT EXISTS request_token_hash TEXT,
+      ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP
   `);
 
   console.log("Database tables ready");
 }
+
 
 // ==========================================
 // ADMIN LOGIN
